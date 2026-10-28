@@ -1,0 +1,33 @@
+# attack-simulation-agent on a host you want to validate detection for (ADR 0072). It enrols once, then asks the
+# server for the tests to run, runs each from its own built-in pack, cleans up, and reports what it did. It runs
+# nothing the server sends as text: the server sends only a pack id and a marker.
+#
+#   openssl rand -hex 32 > openasy-agent-kek   # the agent's own key: it seals the agent's secret (ADR 0021)
+#   ATTACKSIM_URL=https://attack-simulation.example.com ATTACKSIM_ENROLL_TOKEN=aie_... docker compose up -d
+#
+# The enrolment token comes from Attack Simulation, under Hosts. The host runs nothing until an admin allows it there,
+# with a reason. The agent needs the token once and keeps its own secret afterwards.
+services:
+  attack-simulation-agent:
+    image: ghcr.io/openasy/attack-simulation-agent:0.1.0 # always the same version as attack-simulation
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp # the benign tests create and delete their own marker files here
+    volumes:
+      - attack-simulation-agent-data:/data # its secret, sealed
+      - /:/host:ro # read the host's name and os-release, read-only
+    secrets:
+      - openasy-agent-kek
+    environment:
+      ATTACKSIM_URL: ${ATTACKSIM_URL:?the address of attack-simulation}
+      ATTACKSIM_ENROLL_TOKEN: ${ATTACKSIM_ENROLL_TOKEN:-}
+
+volumes:
+  attack-simulation-agent-data:
+
+secrets:
+  openasy-agent-kek:
+    file: ./openasy-agent-kek
